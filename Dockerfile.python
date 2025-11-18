@@ -1,0 +1,16 @@
+# Dockerfile.python
+
+# 1. Base Image
+FROM python:3.10-slim
+
+# 2. Set Working Directory
+WORKDIR /app
+
+# 3. Copy the script
+COPY python_monitor.py /app/
+
+# 4. Install Dependencies
+RUN pip install psutil
+
+# 5. Define the command to run the script when the container starts
+CMD ["python", "python_monitor.py"]
