@@ -1,0 +1,72 @@
+---
+# deployment_playbook.yml
+- name: Deploy System Monitoring Containers via Docker Compose
+  hosts: dev_servers
+  become: yes
+  vars:
+    project_root: /opt/system-monitor
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+    - name: 1. Install Dependencies
+      block:
+        - name: Install general Linux dependencies and Python PIP
+          ansible.builtin.apt:
+            name: ['apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip']
+            state: present
+            update_cache: yes
+            cache_valid_time: 3600
+
+        - name: Install Docker Engine
+          ansible.builtin.apt:
+            name: docker.io
+            state: present
+
+        - name: Install Docker Compose (as a separate package via apt)
+          ansible.builtin.apt:
+            name: docker-compose
+            state: present
+
+        - name: Start and enable Docker service
+          ansible.builtin.service:
+            name: docker
+            state: started
+            enabled: yes
+
+        - name: Ensure the deploying user (ubuntu) is in the 'docker' group
+          ansible.builtin.user:
+            name: '{{ ansible_user }}'
+            groups: docker
+            append: yes
+
+    - name: 2. Create the Project Root Directory
+      ansible.builtin.file:
+        path: '{{ project_root }}'
+        state: directory
+        mode: '0755'
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'
+
+    - name: 3. Copy All Required Project Files
+      ansible.builtin.copy:
+        src: '{{ item }}'
+        dest: '{{ project_root }}/{{ item }}'
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'
+        mode: '0644'
+      loop:
+        - bash_monitor.sh
+        - python_monitor.py
+        - Dockerfile.bash
+        - Dockerfile.python
+        - docker-compose.yml
+
+    - name: 4. Build and Start Docker Compose Services
+      ansible.builtin.shell:
+        cmd: docker-compose up -d --build
+        chdir: '{{ project_root }}'
+      register: compose_output
+
+    - name: Display deployment output and status
+      ansible.builtin.debug:
+        msg: 'Deployment complete! Status: {{ compose_output.stdout_lines }}'
